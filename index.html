@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>بوت الصور - إنشاء وتعديل بالذكاء الاصطناعي</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  body { background: #0f1117; color: #e8eaed; height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 14px 20px; border-bottom: 1px solid #2a2d35; display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .free { background: #1e3a2f; color: #6ee7a0; font-size: 12px; padding: 3px 10px; border-radius: 20px; }
+  #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; max-width: 860px; width: 100%; margin: 0 auto; }
+  .msg { max-width: 80%; padding: 12px 16px; border-radius: 16px; line-height: 1.6; }
+  .msg.user { background: #2b4a8f; align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.bot { background: #1d2027; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.bot img { max-width: 100%; border-radius: 10px; margin-top: 8px; display: block; }
+  .msg.bot .meta { font-size: 11px; color: #8b93a1; margin-top: 8px; }
+  .msg.bot .actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .msg.bot .actions button { background: #2a2d35; color: #e8eaed; border: none; padding: 6px 14px; border-radius: 16px; cursor: pointer; font-size: 13px; }
+  .msg.bot .actions button:hover { background: #3a3e48; }
+  .msg.error { background: #4a1f1f; color: #ffb4b4; }
+  .thinking { color: #8b93a1; font-style: italic; }
+  #edit-banner { display: none; max-width: 860px; width: 100%; margin: 0 auto; padding: 8px 20px; }
+  #edit-banner .inner { background: #3a2e1a; border: 1px solid #8f6b2b; border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; }
+  #edit-banner img { height: 48px; border-radius: 8px; }
+  #edit-banner button { margin-inline-start: auto; background: none; border: none; color: #ffb4b4; cursor: pointer; font-size: 16px; }
+  #composer { max-width: 860px; width: 100%; margin: 0 auto; padding: 12px 20px 20px; }
+  #chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip { background: #1d2027; border: 1px solid #2a2d35; color: #aab2c0; padding: 5px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; }
+  .chip.active { background: #2b4a8f; color: #fff; border-color: #2b4a8f; }
+  #input-row { display: flex; gap: 10px; align-items: flex-end; background: #1d2027; border: 1px solid #2a2d35; border-radius: 24px; padding: 10px 14px; }
+  #prompt { flex: 1; background: none; border: none; outline: none; color: #e8eaed; font-size: 15px; resize: none; max-height: 120px; }
+  #input-row button, #input-row label { background: #2b4a8f; border: none; color: #fff; width: 42px; height: 42px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  #input-row label { background: #2a2d35; }
+  #controls { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; font-size: 13px; color: #aab2c0; flex-wrap: wrap; }
+  #controls select { background: #1d2027; color: #e8eaed; border: 1px solid #2a2d35; border-radius: 8px; padding: 4px 8px; }
+  #strength-wrap { display: none; align-items: center; gap: 8px; }
+  #file-input { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎨 بوت الصور</h1>
+  <span class="free">مجاني 100% - إنشاء وتعديل</span>
+</header>
+<div id="chat">
+  <div class="msg bot">أهلاً! اكتب وصف أي صورة عايز أعملها، أو ارفع صورة واكتب التعديل اللي عايزه. زي: «أسد بيلبس نضارة شمس على شاطئ الإسكندرية» 🌊</div>
+</div>
+<div id="edit-banner">
+  <div class="inner">
+    <img id="edit-thumb" alt="">
+    <span>وضع التعديل: اكتب التغيير المطلوب على الصورة دي</span>
+    <button id="cancel-edit" title="إلغاء">✕</button>
+  </div>
+</div>
+<div id="composer">
+  <div id="chips"></div>
+  <div id="controls">
+    <label>المقاس:
+      <select id="size">
+        <option value="square">مربع</option>
+        <option value="portrait">طولي</option>
+        <option value="landscape">عرضي</option>
+      </select>
+    </label>
+    <span id="strength-wrap">قوة التعديل: <input type="range" id="strength" min="0.2" max="0.9" step="0.05" value="0.6"> <b id="strength-val">0.6</b></span>
+  </div>
+  <div id="input-row">
+    <label for="file-input" title="رفع صورة للتعديل">📎</label>
+    <input type="file" id="file-input" accept="image/*">
+    <textarea id="prompt" rows="1" placeholder="اكتب وصف صورة أو تعديل..."></textarea>
+    <button id="send" title="إرسال">➤</button>
+  </div>
+</div>
+<script>
+const chat = document.getElementById('chat');
+const promptEl = document.getElementById('prompt');
+const sizeEl = document.getElementById('size');
+const strengthEl = document.getElementById('strength');
+const strengthVal = document.getElementById('strength-val');
+const strengthWrap = document.getElementById('strength-wrap');
+const editBanner = document.getElementById('edit-banner');
+const editThumb = document.getElementById('edit-thumb');
+const fileInput = document.getElementById('file-input');
+
+const STYLE_CHIPS = [
+  ['none', 'بدون ستايل'], ['realistic', 'واقعي'], ['anime', 'أنمي'], ['oil', 'لوحة زيتية'],
+  ['logo', 'لوجو'], ['sticker', 'ملصق'], ['cyberpunk', 'سايبربانك'], ['3d', 'ثلاثي الأبعاد'],
+];
+let activeStyle = 'none';
+let editSource = null; // dataURL of image being edited
+
+const chipsEl = document.getElementById('chips');
+for (const [key, label] of STYLE_CHIPS) {
+  const b = document.createElement('button');
+  b.className = 'chip' + (key === 'none' ? ' active' : '');
+  b.textContent = label;
+  b.onclick = () => {
+    activeStyle = key;
+    chipsEl.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    b.classList.add('active');
+  };
+  chipsEl.appendChild(b);
+}
+
+strengthEl.oninput = () => strengthVal.textContent = strengthEl.value;
+
+function addMsg(cls, html) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.innerHTML = html;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function setEditSource(dataUrl) {
+  editSource = dataUrl;
+  editThumb.src = dataUrl;
+  editBanner.style.display = 'block';
+  strengthWrap.style.display = 'inline-flex';
+  promptEl.focus();
+}
+document.getElementById('cancel-edit').onclick = () => {
+  editSource = null;
+  editBanner.style.display = 'none';
+  strengthWrap.style.display = 'none';
+};
+
+fileInput.onchange = () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => setEditSource(reader.result);
+  reader.readAsDataURL(f);
+  fileInput.value = '';
+};
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+async function send() {
+  const prompt = promptEl.value.trim();
+  if (!prompt) return;
+  promptEl.value = '';
+  addMsg('user', (editSource ? '🖼️➕ ' : '') + esc(prompt));
+  const thinking = addMsg('bot thinking', editSource ? '⏳ بعدّل الصورة... ممكن ياخد لدقيقتين' : '⏳ برسم الصورة...');
+
+  const payload = { prompt, size: sizeEl.value, style: activeStyle };
+  let url = '/api/create';
+  if (editSource) {
+    url = '/api/edit';
+    payload.image = editSource;
+    payload.strength = parseFloat(strengthEl.value);
+  }
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    thinking.remove();
+    if (!data.ok) { addMsg('bot error', '❌ ' + esc(data.error || 'حصل خطأ')); return; }
+    const div = addMsg('bot', `<img src="${data.image}" alt=""><div class="meta">${esc(data.backend)}${data.note ? ' - ' + esc(data.note) : ''}</div>`);
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const dl = document.createElement('button');
+    dl.textContent = '⬇️ تحميل';
+    dl.onclick = () => { const a = document.createElement('a'); a.href = data.image; a.download = 'image.' + (data.mime.includes('webp') ? 'webp' : data.mime.includes('png') ? 'png' : 'jpg'); a.click(); };
+    const ed = document.createElement('button');
+    ed.textContent = '✏️ عدّل الصورة دي';
+    ed.onclick = () => setEditSource(data.image);
+    actions.appendChild(dl);
+    actions.appendChild(ed);
+    div.appendChild(actions);
+    if (editSource) document.getElementById('cancel-edit').click();
+    chat.scrollTop = chat.scrollHeight;
+  } catch (e) {
+    thinking.remove();
+    addMsg('bot error', '❌ مشكلة في الاتصال: ' + esc(e.message));
+  }
+}
+
+document.getElementById('send').onclick = send;
+promptEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+</script>
+</body>
+</html>
